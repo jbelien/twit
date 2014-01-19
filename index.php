@@ -1,10 +1,31 @@
 <?php
+date_default_timezone_set('Europe/Brussels');
 require_once('request.php');
 
 $ini = parse_ini_file('settings.ini', TRUE);
 
-//$r = request($ini['oauth'], 'https://api.twitter.com/1.1/users/show.json', array('screen_name' => 'jbelien'));
-//var_dump($r);
+$user = 'jbelien';
+$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/show.json', array('screen_name' => $user));
+//var_dump($req);
+
+$tw_count = array(); $fo_count = array(); $fr_count = array();
+$dataset = array();
+
+$dblink = new MySQLi($ini['mysql']['host'], $ini['mysql']['username'], $ini['mysql']['passwd'], $ini['mysql']['dbname']);
+if ($dblink->connect_error) trigger_error('Erreur de connexion : '.$dblink->connect_error);
+$q = $dblink->query("SELECT * FROM `check` WHERE `UserId` = ".$req->id." ORDER BY `Datetime` ASC") or trigger_error($dblink->error);
+while ($r = $q->fetch_assoc()) {
+	$timestamp = intval(strtotime($r['Datetime']));
+	$tw_count[$timestamp * 1000] = intval($r['TweetsCount']);
+	$fo_count[$timestamp * 1000] = intval($r['FollowersCount']);
+	$fr_count[$timestamp * 1000] = intval($r['FriendsCount']);
+
+	$dataset[$timestamp] = $r;
+}
+$q->free();
+$dblink->close();
+
+krsort($dataset);
 ?>
 <!DOCTYPE html>
 <html>
@@ -22,48 +43,63 @@ $ini = parse_ini_file('settings.ini', TRUE);
 		<div id="wrap">
 			<div class="container">
 				<div class="page-header">
-					<h1><i class="fa fa-twitter"></i> Twitter Statistics of <a href="https://twitter.com/jbelien">@jbelien</a></h1>
+					<h1><i class="fa fa-twitter"></i> Twitter Statistics for <a href="https://twitter.com/<?php echo $user; ?>">@<?php echo $user; ?></a></h1>
 				</div>
 				<?php
-				$params = array(
-					'screen_name' => 'jbelien'
-				);
-
-				$req1 = request($ini['oauth'], 'https://api.twitter.com/1.1/users/show.json', $params);
-				//var_dump($req);
-				echo '<div class="row"><div class="col-sm-2">Name</div><div class="col-sm-10">'.$req1->name.'</div></div>';
-				echo '<div class="row"><div class="col-sm-2">Location</div><div class="col-sm-10">'.$req1->location.'</div></div>';
-				echo '<div class="row"><div class="col-sm-2">Since</div><div class="col-sm-10">'.date('j F Y', strtotime($req1->created_at)).'</div></div>';
-				echo '<h2 class="text-info">'.date('j F Y').'</h2>';
-				echo '<div class="row"><div class="col-sm-2">Followers</div><div class="col-sm-10">'.$req1->followers_count.'</div></div>';
-				echo '<div class="row"><div class="col-sm-2">Friends</div><div class="col-sm-10">'.$req1->friends_count.'</div></div>';
-				echo '<div class="row"><div class="col-sm-2">Tweets</div><div class="col-sm-10">'.$req1->statuses_count.'</div></div>';
+				echo '<div class="row"><div class="col-sm-1">Name</div><div class="col-sm-11">'.$req->name.'</div></div>';
+				echo '<div class="row"><div class="col-sm-1">Location</div><div class="col-sm-11">'.$req->location.'</div></div>';
+				echo '<div class="row"><div class="col-sm-1">Since</div><div class="col-sm-11">'.date('j F Y', strtotime($req->created_at)).'</div></div>';
 
 				echo '<div class="row">';
-					$req2 = request($ini['oauth'], 'https://api.twitter.com/1.1/followers/ids.json', $params);
-					echo '<div class="col-sm-6">';
-						echo '<h3>Followers ('.$req1->followers_count.')</h3>';
-						$ids = array_chunk($req2->ids, 100);
-						echo '<table class="table table-striped table-condensed" style="font-size:0.8em;">';
-						$c = count($ids);
-						for ($i = 0; $i < $c; $i++) {
-							$_req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $ids[$i])), 'GET');
-							foreach($_req as $u) {
-								echo '<tr>';
-								echo '<td><a href="https://twitter.com/'.$u->screen_name.'">@'.$u->screen_name.'</a></td>';
-								echo '<td>'.$u->name.'</td>';
-								echo '<td>'.$u->location.'</td>';
-								echo '<td>'.date('j F Y', strtotime($u->created_at)).'</td>';
-								echo '</tr>';
+					echo '<div class="col-sm-4"><h2>Tweets</h2><div id="chart1" style="height:200px;"></div></div>';
+					echo '<div class="col-sm-4"><h2>Followers</h2><div id="chart2" style="height:200px;"></div></div>';
+					echo '<div class="col-sm-4"><h2>Friends</h2><div id="chart3" style="height:200px;"></div></div>';
+				echo '</div>';
+
+				echo '<table class="table table-striped table-condensed" style="margin-top:20px;">';
+				echo '<thead>';
+					echo '<tr>';
+						echo '<th>Date</th>';
+						echo '<th>Tweets</th>';
+						echo '<th>Followers</th>';
+						echo '<th>Friends</th>';
+					echo '</tr>';
+				echo '</thead>';
+				echo '<tbody>';
+				$keys = array_keys($dataset); $i = 0; $count = count($dataset);
+				foreach ($dataset as $t => $d) {
+					$diff1 = array(); $diff2 = array();
+
+					echo '<tr>';
+					echo '<td>'.date('j F Y H:i', $t).'</td>';
+					echo '<td>'.$d['TweetsCount'].'</td>';
+					echo '<td>'.$d['FollowersCount'].'</td>';
+					echo '<td>';
+						echo $d['FriendsCount'];
+						if (($i+1) < $count) {
+							$k = $keys[$i+1];
+							$prev = $dataset[$k];
+
+							$u1 = explode(',', $d['Friends']);
+							$u2 = explode(',', $prev['Friends']);
+
+							$diff1 = array_diff($u1, $u2);
+							if (!empty($diff1)) {
+								$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $diff1)), 'GET');
+								echo '<div>'; foreach($req as $r) { echo '<span class="label label-success"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
+							}
+							$diff2 = array_diff($u2, $u1);
+							if (!empty($diff2)) {
+								$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $diff2)), 'GET');
+								echo '<div>'; foreach($req as $r) { echo '<span class="label label-danger"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
 							}
 						}
-						echo '</table>';
-					echo '</div>';
-					$req = request($ini['oauth'], 'https://api.twitter.com/1.1/friends/ids.json', $params);
-					echo '<div class="col-sm-6">';
-						echo '<h3>Friends ('.$req1->friends_count.')</h3>';
-					echo '</div>';
-				echo '</div>';
+					echo '</td>';
+					echo '</tr>';
+					$i++;
+				}
+				echo '</tbody>';
+				echo '</table>';
 				?>
 			</div>
 		</div>
@@ -72,7 +108,20 @@ $ini = parse_ini_file('settings.ini', TRUE);
 		</footer>
 
 		<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
-		<script>window.jQuery || document.write('<script src="js/vendor/jquery-1.10.2.min.js"><\/script>')</script>
+		<script>window.jQuery || document.write('<script src="js/jquery-1.10.2.min.js"><\/script>')</script>
 		<script src="js/bootstrap.min.js"></script>
+		<script src="js/jquery.flot.min.js"></script>
+		<script src="js/jquery.flot.time.min.js"></script>
+		<script type="text/javascript">
+			$(function() {
+				var d1 = <?php echo json_encode(array_map(function($key, $value) { return array($key, $value); },array_keys($tw_count),array_values($tw_count))); ?>;
+				var d2 = <?php echo json_encode(array_map(function($key, $value) { return array($key, $value); },array_keys($fo_count),array_values($fo_count))); ?>;
+				var d3 = <?php echo json_encode(array_map(function($key, $value) { return array($key, $value); },array_keys($fr_count),array_values($fr_count))); ?>;
+
+				$.plot("#chart1", [ { data: d1, color: 0 } ], { xaxis: { mode: "time" }, yaxis: { tickDecimals: 0 } });
+				$.plot("#chart2", [ { data: d2, color: 1 } ], { color: "#f6f6f6", xaxis: { mode: "time" }, yaxis: { tickDecimals: 0 } });
+				$.plot("#chart3", [ { data: d3, color: 4 } ], { color: "#f6f6f6", xaxis: { mode: "time" }, yaxis: { tickDecimals: 0 } });
+			});
+		</script>
 	</body>
 </html>
