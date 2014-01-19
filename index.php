@@ -68,12 +68,34 @@ krsort($dataset);
 				echo '<tbody>';
 				$keys = array_keys($dataset); $i = 0; $count = count($dataset);
 				foreach ($dataset as $t => $d) {
-					$diff1 = array(); $diff2 = array();
-
 					echo '<tr>';
 					echo '<td>'.date('j F Y H:i', $t).'</td>';
 					echo '<td>'.$d['TweetsCount'].'</td>';
-					echo '<td>'.$d['FollowersCount'].'</td>';
+
+					$diff1 = array(); $diff2 = array();
+					echo '<td>';
+						echo $d['FollowersCount'];
+						if (($i+1) < $count) {
+							$k = $keys[$i+1];
+							$prev = $dataset[$k];
+
+							$u1 = explode(',', $d['Followers']);
+							$u2 = explode(',', $prev['Followers']);
+
+							$diff1 = array_diff($u1, $u2);
+							if (!empty($diff1)) {
+								$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $diff1)), 'GET');
+								echo '<div>'; foreach($req as $r) { echo '<span class="label label-success"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
+							}
+							$diff2 = array_diff($u2, $u1);
+							if (!empty($diff2)) {
+								$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $diff2)), 'GET');
+								echo '<div>'; foreach($req as $r) { echo '<span class="label label-danger"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
+							}
+						}
+					echo '</td>';
+
+					$diff1 = array(); $diff2 = array();
 					echo '<td>';
 						echo $d['FriendsCount'];
 						if (($i+1) < $count) {
