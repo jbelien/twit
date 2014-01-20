@@ -5,6 +5,7 @@ require_once('request.php');
 $ini = parse_ini_file('settings.ini', TRUE);
 
 $user = 'jbelien';
+//$user_id = 53360186;
 $req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/show.json', array('screen_name' => $user));
 //var_dump($req);
 
@@ -15,12 +16,13 @@ $dblink = new MySQLi($ini['mysql']['host'], $ini['mysql']['username'], $ini['mys
 if ($dblink->connect_error) trigger_error('Erreur de connexion : '.$dblink->connect_error);
 $q = $dblink->query("SELECT * FROM `check` WHERE `UserId` = ".$req->id." ORDER BY `Datetime` ASC") or trigger_error($dblink->error);
 while ($r = $q->fetch_assoc()) {
-	$timestamp = intval(strtotime($r['Datetime']));
-	$tw_count[$timestamp * 1000] = intval($r['TweetsCount']);
-	$fo_count[$timestamp * 1000] = intval($r['FollowersCount']);
-	$fr_count[$timestamp * 1000] = intval($r['FriendsCount']);
+	$timestamp = strtotime($r['Datetime']);
 
 	$dataset[$timestamp] = $r;
+
+	$tw_count[] = array($timestamp, intval($r['TweetsCount']));
+	$fo_count[] = array($timestamp, intval($r['FollowersCount']));
+	$fr_count[] = array($timestamp, intval($r['FriendsCount']));
 }
 $q->free();
 $dblink->close();
@@ -72,22 +74,23 @@ krsort($dataset);
 					echo '<td>'.date('j F Y H:i', $t).'</td>';
 					echo '<td>'.$d['TweetsCount'].'</td>';
 
-					$diff1 = array(); $diff2 = array();
+					$diff1 = array(); $diff2 = array(); $fo1 = array(); $fo2 = array(); $fr1 = array(); $fr2 = array(); $foCount = count(explode(',', $d['Followers']));
 					echo '<td>';
 						echo $d['FollowersCount'];
+						if ($foCount != $d['FollowersCount']) echo ' ('.$foCount.')';
 						if (($i+1) < $count) {
 							$k = $keys[$i+1];
 							$prev = $dataset[$k];
 
-							$u1 = explode(',', $d['Followers']);
-							$u2 = explode(',', $prev['Followers']);
+							$fo1 = explode(',', $d['Followers']);
+							$fo2 = explode(',', $prev['Followers']);
 
-							$diff1 = array_diff($u1, $u2);
+							$diff1 = array_diff($fo1, $fo2);
 							if (!empty($diff1)) {
 								$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $diff1)), 'GET');
 								echo '<div>'; foreach($req as $r) { echo '<span class="label label-success"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
 							}
-							$diff2 = array_diff($u2, $u1);
+							$diff2 = array_diff($fo2, $fo1);
 							if (!empty($diff2)) {
 								$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $diff2)), 'GET');
 								echo '<div>'; foreach($req as $r) { echo '<span class="label label-danger"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
@@ -95,22 +98,23 @@ krsort($dataset);
 						}
 					echo '</td>';
 
-					$diff1 = array(); $diff2 = array();
+					$diff1 = array(); $diff2 = array(); $frCount = count(explode(',', $d['Friends']));
 					echo '<td>';
 						echo $d['FriendsCount'];
+						if ($frCount != $d['FriendsCount']) echo ' ('.$frCount.')';
 						if (($i+1) < $count) {
 							$k = $keys[$i+1];
 							$prev = $dataset[$k];
 
-							$u1 = explode(',', $d['Friends']);
-							$u2 = explode(',', $prev['Friends']);
+							$fr1 = explode(',', $d['Friends']);
+							$fr2 = explode(',', $prev['Friends']);
 
-							$diff1 = array_diff($u1, $u2);
+							$diff1 = array_diff($fr1, $fr2);
 							if (!empty($diff1)) {
 								$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $diff1)), 'GET');
 								echo '<div>'; foreach($req as $r) { echo '<span class="label label-success"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
 							}
-							$diff2 = array_diff($u2, $u1);
+							$diff2 = array_diff($fr2, $fr1);
 							if (!empty($diff2)) {
 								$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $diff2)), 'GET');
 								echo '<div>'; foreach($req as $r) { echo '<span class="label label-danger"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
@@ -134,15 +138,20 @@ krsort($dataset);
 		<script src="js/bootstrap.min.js"></script>
 		<script src="js/jquery.flot.min.js"></script>
 		<script src="js/jquery.flot.time.min.js"></script>
+		<script src="js/date.js"></script>
 		<script type="text/javascript">
 			$(function() {
-				var d1 = <?php echo json_encode(array_map(function($key, $value) { return array($key, $value); },array_keys($tw_count),array_values($tw_count))); ?>;
-				var d2 = <?php echo json_encode(array_map(function($key, $value) { return array($key, $value); },array_keys($fo_count),array_values($fo_count))); ?>;
-				var d3 = <?php echo json_encode(array_map(function($key, $value) { return array($key, $value); },array_keys($fr_count),array_values($fr_count))); ?>;
+				timezoneJS.timezone.zoneFileBasePath = "tz";
+				timezoneJS.timezone.defaultZoneFile = [];
+				timezoneJS.timezone.init({async: false});
 
-				$.plot("#chart1", [ { data: d1, color: 0 } ], { xaxis: { mode: "time" }, yaxis: { tickDecimals: 0 } });
-				$.plot("#chart2", [ { data: d2, color: 1 } ], { color: "#f6f6f6", xaxis: { mode: "time" }, yaxis: { tickDecimals: 0 } });
-				$.plot("#chart3", [ { data: d3, color: 4 } ], { color: "#f6f6f6", xaxis: { mode: "time" }, yaxis: { tickDecimals: 0 } });
+				var d1 = [<?php $c = count($tw_count); for ($i = 0; $i < $c; $i++) { if ($i > 0) echo ','; echo '['.($tw_count[$i][0]*1000).','.$tw_count[$i][1].']'; } ?>];
+				var d2 = [<?php $c = count($fo_count); for ($i = 0; $i < $c; $i++) { if ($i > 0) echo ','; echo '['.($fo_count[$i][0]*1000).','.$fo_count[$i][1].']'; } ?>];
+				var d3 = [<?php $c = count($fr_count); for ($i = 0; $i < $c; $i++) { if ($i > 0) echo ','; echo '['.($fr_count[$i][0]*1000).','.$fr_count[$i][1].']'; } ?>];
+
+				$.plot("#chart1", [ { data: d1, color: 0 } ], { xaxis: { mode: "time", timezone: "Europe/Brussels" }, yaxis: { tickDecimals: 0 } });
+				$.plot("#chart2", [ { data: d2, color: 1 } ], { color: "#f6f6f6", xaxis: { mode: "time", timezone: "Europe/Brussels" }, yaxis: { tickDecimals: 0 } });
+				$.plot("#chart3", [ { data: d3, color: 4 } ], { color: "#f6f6f6", xaxis: { mode: "time", timezone: "Europe/Brussels" }, yaxis: { tickDecimals: 0 } });
 			});
 		</script>
 	</body>
