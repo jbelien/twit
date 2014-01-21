@@ -93,7 +93,7 @@ krsort($dataset);
 							$diff2 = array_diff($fo2, $fo1);
 							if (!empty($diff2)) {
 								$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $diff2)), 'GET');
-								echo '<div>'; foreach($req as $r) { echo '<span class="label label-danger"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
+								echo '<div>'; foreach($req as $r) { if (is_array($r) && $r[0]->code == 34) echo '<span class="label label-danger">Acc. deleted!</span>'; else echo '<span class="label label-danger"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
 							}
 						}
 					echo '</td>';
@@ -117,7 +117,7 @@ krsort($dataset);
 							$diff2 = array_diff($fr2, $fr1);
 							if (!empty($diff2)) {
 								$req = request($ini['oauth'], 'https://api.twitter.com/1.1/users/lookup.json', array('user_id' => implode(',', $diff2)), 'GET');
-								echo '<div>'; foreach($req as $r) { echo '<span class="label label-danger"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
+								echo '<div>'; foreach($req as $r) { if (is_array($r) && $r[0]->code == 34) echo '<span class="label label-danger">Acc. deleted!</span>'; else echo '<span class="label label-danger"><a href="https://twitter.com/'.$r->screen_name.'" style="color:#fff;">@'.$r->screen_name.'</a></span> '; } echo '</div>';
 							}
 						}
 					echo '</td>';
