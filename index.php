@@ -145,9 +145,9 @@ krsort($dataset);
 				timezoneJS.timezone.defaultZoneFile = [];
 				timezoneJS.timezone.init({async: false});
 
-				var d1 = [<?php $c = count($tw_count); for ($i = 0; $i < $c; $i++) { if ($i > 0) echo ','; echo '['.($tw_count[$i][0]*1000).','.$tw_count[$i][1].']'; } ?>];
-				var d2 = [<?php $c = count($fo_count); for ($i = 0; $i < $c; $i++) { if ($i > 0) echo ','; echo '['.($fo_count[$i][0]*1000).','.$fo_count[$i][1].']'; } ?>];
-				var d3 = [<?php $c = count($fr_count); for ($i = 0; $i < $c; $i++) { if ($i > 0) echo ','; echo '['.($fr_count[$i][0]*1000).','.$fr_count[$i][1].']'; } ?>];
+				var d1 = [<?php $c = count($tw_count); for ($i = 0; $i < $c; $i++) { if ($i > 0) echo ','; if (isset($tw_count[$i-1]) && date('z',$tw_count[$i][0]) != date('z',$tw_count[$i-1][0])) echo 'null,'; echo '['.($tw_count[$i][0]*1000).','.$tw_count[$i][1].']'; } ?>];
+				var d2 = [<?php $c = count($fo_count); for ($i = 0; $i < $c; $i++) { if ($i > 0) echo ','; if (isset($fo_count[$i-1]) && date('z',$fo_count[$i][0]) != date('z',$fo_count[$i-1][0])) echo 'null,'; echo '['.($fo_count[$i][0]*1000).','.$fo_count[$i][1].']'; } ?>];
+				var d3 = [<?php $c = count($fr_count); for ($i = 0; $i < $c; $i++) { if ($i > 0) echo ','; if (isset($fr_count[$i-1]) && date('z',$fr_count[$i][0]) != date('z',$fr_count[$i-1][0])) echo 'null,'; echo '['.($fr_count[$i][0]*1000).','.$fr_count[$i][1].']'; } ?>];
 
 				$.plot("#chart1", [ { data: d1, color: 0 } ], { xaxis: { mode: "time", timezone: "Europe/Brussels" }, yaxis: { tickDecimals: 0 } });
 				$.plot("#chart2", [ { data: d2, color: 1 } ], { color: "#f6f6f6", xaxis: { mode: "time", timezone: "Europe/Brussels" }, yaxis: { tickDecimals: 0 } });
